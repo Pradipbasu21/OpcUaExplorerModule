@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "sicTCVUlzjWHvnYm4Ntu7DVf0bEiaxW3NI3raEVD5cM=",
+  "Source": "OpcUaWebApi",
+  "BasePath": "_content/OpcUaWebApi",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

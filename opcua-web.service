@@ -1,0 +1,14 @@
+[Unit]
+Description=OPC UA Web UI Service
+After=network.target opcua-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pradipbsub/PradipDocument/DotnetCore/DotProjects/OpcUA/publish/web
+ExecStart=/usr/bin/python3 -m http.server 5500 --directory /home/pradipbsub/PradipDocument/DotnetCore/DotProjects/OpcUA/publish/web
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

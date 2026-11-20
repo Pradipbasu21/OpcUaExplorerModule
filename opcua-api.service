@@ -1,0 +1,14 @@
+[Unit]
+Description=OPC UA Web API Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pradipbsub/PradipDocument/DotnetCore/DotProjects/OpcUA/publish/api
+ExecStart=/usr/bin/dotnet /home/pradipbsub/PradipDocument/DotnetCore/DotProjects/OpcUA/publish/api/OpcUaWebApi.dll --urls http://0.0.0.0:5000
+Restart=on-failure
+RestartSec=5
+Environment=ASPNETCORE_ENVIRONMENT=Production
+
+[Install]
+WantedBy=multi-user.target

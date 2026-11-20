@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OPC UA + MQTT Explorer</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>OPC UA + MQTT Explorer</h1>
+    <p>Browse your industrial OPC UA address space</p>
+  </div>
+  <span id="connectionStatus" class="status disconnected">Disconnected</span>
+</header>
+
+<main class="page">
+  <section class="panel">
+    <div class="panel-heading">
+      <h2>Server configuration</h2>
+      <span class="hint">Connect through your .NET 8 Web API</span>
+    </div>
+    <div class="config-grid">
+      <label class="field wide">
+        <span>Web API base URL</span>
+        <input id="apiUrl" value="http://localhost:5016" placeholder="http://localhost:5016">
+      </label>
+      <label class="field wide">
+        <span>OPC UA endpoint URL</span>
+        <input id="endpointUrl" placeholder="opc.tcp://192.168.1.100:4840">
+      </label>
+      <label class="field">
+        <span>Username (optional)</span>
+        <input id="username" autocomplete="username" placeholder="Username">
+      </label>
+      <label class="field">
+        <span>Password (optional)</span>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Password">
+      </label>
+    </div>
+    <div class="toolbar">
+      <button id="connectBtn" class="primary">Connect</button>
+      <button id="disconnectBtn" class="danger" disabled>Disconnect</button>
+      <button id="browseBtn" class="secondary" disabled>Browse nodes</button>
+      <button id="refreshBtn" class="secondary" disabled>Refresh tree</button>
+    </div>
+    <p id="message" class="message" role="status">Enter the API URL and OPC UA endpoint, then connect.</p>
+  </section>
+
+
+  <section class="panel mqtt-panel" id="mqttPanel">
+    <div class="panel-heading">
+      <div>
+        <h2>MQTT broker configuration</h2>
+        <span class="hint">Connect the Explorer to MQTT and publish selected OPC UA tag values</span>
+      </div>
+      <span id="mqttConnectionStatus" class="status disconnected">MQTT Disconnected</span>
+    </div>
+    <div class="config-grid mqtt-config-grid">
+      <label class="field wide">
+        <span>MQTT Host</span>
+        <input id="mqttHost" value="15.206.175.27" placeholder="MQTT broker host or IP">
+      </label>
+      <label class="field">
+        <span>Port</span>
+        <input id="mqttPort" type="number" min="1" max="65535" value="1883">
+      </label>
+      <label class="field">
+        <span>Username (optional)</span>
+        <input id="mqttUsername" autocomplete="username" placeholder="MQTT username">
+      </label>
+      <label class="field">
+        <span>Password (optional)</span>
+        <input id="mqttPassword" type="password" autocomplete="new-password" placeholder="MQTT password">
+      </label>
+      <label class="field wide">
+        <span>Publish topic</span>
+        <input id="mqttTopic" value="mpac/subtleweigh/formatter-kepserver/line1">
+      </label>
+      <label class="checkbox-label mqtt-tls-option">
+        <input type="checkbox" id="mqttUseTls">
+        <span>Use TLS</span>
+      </label>
+      <label class="checkbox-label mqtt-tls-option">
+        <input type="checkbox" id="mqttAutoReconnect" checked>
+        <span>Auto reconnect</span>
+      </label>
+    </div>
+    <div class="toolbar mqtt-toolbar">
+      <button id="mqttConnectBtn" class="primary">Connect MQTT</button>
+      <button id="mqttDisconnectBtn" class="danger" disabled>Disconnect MQTT</button>
+      <button id="mqttPublishNowBtn" class="secondary" disabled>Publish selected tags now</button>
+      <label class="checkbox-label mqtt-auto-publish">
+        <input type="checkbox" id="mqttAutoPublishCb" checked>
+        <span>Auto-publish during live reading</span>
+      </label>
+    </div>
+    <p id="mqttMessage" class="message" role="status">Connect to your MQTT broker before publishing tag data.</p>
+    <div class="mqtt-payload-preview">
+      <div class="hint">Payload format (one JSON object per selected tag)</div>
+      <pre id="mqttPayloadPreview">{
+  "id": "Channel3.Device3._System._Description",
+  "v": 18751.1504,
+  "q": true,
+  "t": 1794473313899
+}</pre>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <section class="panel browser-panel">
+      <div class="panel-heading">
+        <h2>Address space</h2>
+        <div class="small-actions">
+          <button id="expandBtn" class="text-button" disabled>Expand all</button>
+          <button id="collapseBtn" class="text-button" disabled>Collapse all</button>
+        </div>
+      </div>
+      <div class="tree-tools">
+        <input id="treeSearch" type="search" placeholder="Filter loaded nodes..." disabled>
+        <span id="nodeCount" class="hint">0 nodes</span>
+      </div>
+      <div class="tree-filter-options">
+        <label class="checkbox-label" title="Hide system nodes like _System, _Statistics, _Hints under Channel1">
+          <input type="checkbox" id="hideChannelChildrenCb" checked>
+          <span>Hide unnecessary children of Channel1</span>
+        </label>
+      </div>
+      <div class="tree-selection-bar" id="treeSelectionBar" hidden>
+        <span id="treeSelectedCount">0 tags selected</span>
+        <button id="treeClearBtn" class="text-button">Clear</button>
+      </div>
+      <div id="tree" class="tree empty">Connect to a server to load its nodes.</div>
+    </section>
+
+    <section class="right-column">
+      <section class="panel children-panel" id="childrenPanel">
+        <div class="panel-heading">
+          <div>
+            <h2 id="childrenTitle">Child nodes</h2>
+            <div id="parentPath" class="hint">Select or check a tree node to browse all its tags.</div>
+          </div>
+          <div class="children-header-actions">
+            <span id="childrenCount" class="node-class">0 items</span>
+            <div class="toolbar-inline">
+              <button id="saveConfigBtn" class="primary small-btn" title="Save current tags and scan rates to configuration">💾 Save Config</button>
+              <button id="loadConfigBtn" class="secondary small-btn" title="Load saved tags from configuration file">📂 Load Config</button>
+              <button id="bulkEditScanRateBtn" class="secondary small-btn" title="Change scan rate for selected tags">✏️ Edit Scan Rate</button>
+              <input type="file" id="importConfigFile" accept=".json" style="display: none;">
+            </div>
+          </div>
+        </div>
+
+        <div id="configSavedBanner" class="config-banner saved" style="display: none;">
+          <div class="config-banner-text">
+            <span>💾 <strong>Configuration Saved:</strong> <span id="configBannerMsg">Tags and scan rates saved to browser configuration.</span></span>
+            <span id="configBannerTimestamp" class="hint"></span>
+          </div>
+          <div class="config-banner-actions">
+            <button id="downloadConfigBtn" class="text-button" title="Download configuration as JSON file">Download .json</button>
+            <button id="dismissSavedBannerBtn" class="text-button">✕</button>
+          </div>
+        </div>
+
+        <div id="configLoadedBanner" class="config-banner loaded" style="display: none;">
+          <div class="config-banner-text">
+            <span>📂 <strong>Configuration Restored:</strong> Loaded <span id="restoredTagsCount">0</span> tags from your saved configuration file.</span>
+            <span id="restoredTimestamp" class="hint"></span>
+          </div>
+          <div class="config-banner-actions">
+            <button id="applyAllSavedBtn" class="primary small-btn">Select All For Read</button>
+            <button id="clearSavedConfigBtn" class="danger small-btn">Clear Saved Config</button>
+            <button id="dismissLoadedBannerBtn" class="text-button">✕</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="children-table">
+            <thead>
+              <tr>
+                <th class="cb-col"><input type="checkbox" id="selectAllChildren" title="Select all tags in this folder"></th>
+                <th>Tag Name</th>
+                <th>Address</th>
+                <th>Data Type</th>
+                <th>Scan Rate / Time ✏️</th>
+                <th>On-Change Mode</th>
+                <th>Scaling</th>
+                <th>Description</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="childrenTableBody">
+              <tr><td colspan="9" class="table-empty">Select or check a tree node to display all its tags.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel selected-panel" id="selectedTagsPanel">
+        <div class="panel-heading">
+          <div class="selected-header-left">
+            <h2>Selected Tags</h2>
+            <span id="selectedTagsBadge" class="badge">0 tags selected</span>
+          </div>
+          <div class="toolbar-inline">
+            <button id="clearSelectedBtn" class="secondary small-btn" disabled>Clear All</button>
+            <button id="exportCsvBtn" class="secondary small-btn" disabled>Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Mode selection and live controls -->
+        <div class="monitor-control-bar">
+          <div class="mode-selector-group">
+            <span class="control-label">Read Mode:</span>
+            <div class="segmented-control">
+              <button type="button" id="btnModeScanTime" class="seg-btn active" title="Periodically read multi-selected tags based on scan time">⏱️ Scan Time</button>
+              <button type="button" id="btnModeOnChange" class="seg-btn" title="Read and report data only when tag values change">⚡ OnChange</button>
+            </div>
+          </div>
+
+          <div class="scan-time-settings" id="scanTimeSettings">
+            <label for="scanIntervalInput" class="control-label">Interval:</label>
+            <div class="input-with-unit">
+              <input type="number" id="scanIntervalInput" value="1000" min="100" step="100" style="width: 75px;">
+              <span>ms</span>
+            </div>
+            <label class="checkbox-label inline-cb" title="Respect each tag's configured Scan Time instead of a fixed interval">
+              <input type="checkbox" id="useTagScanRateCb">
+              <span>Use Tag's Scan Time</span>
+            </label>
+          </div>
+
+          <div class="onchange-settings" id="onChangeSettings" style="display: none;">
+            <span class="badge mode-badge">⚡ Auto-detects data changes</span>
+            <span class="hint">Updates table and highlights cells when values change.</span>
+          </div>
+
+          <div class="monitor-action-buttons">
+            <button id="startMonitorBtn" class="primary small-btn" disabled>▶️ Start Reading</button>
+            <button id="stopMonitorBtn" class="danger small-btn" disabled style="display: none;">⏹️ Stop</button>
+            <button id="readOnceBtn" class="secondary small-btn" disabled title="Read current values once">Single Read</button>
+          </div>
+        </div>
+
+        <div class="monitor-status-card" id="monitorStatusCard">
+          <div class="status-left">
+            <span id="monitorStatusDot" class="status-dot idle"></span>
+            <span id="monitorStatusText">Idle (Stopped). Select 'Scan Time' or 'OnChange' and click 'Start Reading'.</span>
+          </div>
+          <div class="status-right" id="monitorStatsText">
+            <span>Reads: 0</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="selected-table">
+            <thead>
+              <tr>
+                <th class="cb-col"><input type="checkbox" id="selectAllSelected" checked title="Toggle all selected"></th>
+                <th>Tag Name</th>
+                <th>Address / Node ID</th>
+                <th>Data Type</th>
+                <th>Scan Time</th>
+                <th>On-Change Mode</th>
+                <th>Current Value</th>
+                <th>Change Status</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+                <th>Remove</th>
+              </tr>
+            </thead>
+            <tbody id="selectedTableBody">
+              <tr><td colspan="11" class="table-empty">No tags selected. Check any parent folder in the tree or individual rows to select tags.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel details-panel">
+        <div class="panel-heading">
+          <h2>Selected node details</h2>
+          <span id="selectedClass" class="node-class">No selection</span>
+        </div>
+        <div id="emptyDetails" class="empty-details">
+          <div class="empty-icon">◇</div>
+          <p>Select a variable from the child table to inspect and read its value.</p>
+        </div>
+        <div id="nodeDetails" hidden>
+          <div class="value-card">
+            <div class="hint">Current value</div>
+            <div id="nodeValue" class="current-value">Not read</div>
+            <div id="readStatus" class="hint">Click Read value to fetch the latest value.</div>
+          </div>
+          <dl class="properties">
+            <div><dt>Display name</dt><dd id="detailName">—</dd></div>
+            <div><dt>Node ID</dt><dd id="detailNodeId" class="mono">—</dd></div>
+            <div><dt>Node class</dt><dd id="detailNodeClass">—</dd></div>
+            <div><dt>Data type</dt><dd id="detailDataType">—</dd></div>
+            <div><dt>Scan time</dt><dd id="detailScanTime">—</dd></div>
+            <div><dt>On-change mode</dt><dd id="detailOnChangeMode">—</dd></div>
+            <div><dt>Status code</dt><dd id="detailStatus">—</dd></div>
+            <div><dt>Source timestamp</dt><dd id="detailTimestamp">—</dd></div>
+          </dl>
+          <div class="toolbar"><button id="readBtn" class="primary" disabled>Read value</button></div>
+        </div>
+      </section>
+    </section>
+  </section>
+
+  <!-- Edit Scan Rate Modal Dialog -->
+  <dialog id="editScanRateModal" class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Edit Scan Rate</h3>
+        <button id="modalCloseBtn" class="modal-close-btn" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="modalTagDesc" class="hint">Adjust the scan rate (sampling interval) in milliseconds.</p>
+        <div class="preset-buttons">
+          <span class="hint">Presets:</span>
+          <button type="button" class="preset-btn" data-rate="100">100 ms</button>
+          <button type="button" class="preset-btn" data-rate="250">250 ms</button>
+          <button type="button" class="preset-btn" data-rate="500">500 ms</button>
+          <button type="button" class="preset-btn" data-rate="1000">1000 ms</button>
+          <button type="button" class="preset-btn" data-rate="2000">2000 ms</button>
+          <button type="button" class="preset-btn" data-rate="5000">5000 ms</button>
+        </div>
+        <label class="field" style="margin-top: 14px;">
+          <span>Scan Rate (ms):</span>
+          <input type="number" id="modalScanRateInput" min="10" step="50" value="1000">
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="modalCancelBtn" class="secondary" type="button">Cancel</button>
+        <button id="modalSaveBtn" class="primary" type="button">Save Scan Rate</button>
+      </div>
+    </div>
+  </dialog>
+
+  <footer>OPC UA + MQTT Explorer Web UI · .NET 8 Web API client</footer>
+</main>
+<script src="js/app.js"></script>
+</body>
+</html>
